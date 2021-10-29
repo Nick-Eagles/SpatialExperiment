@@ -2,14 +2,29 @@
 % Please edit documentation in R/coerce.R
 \name{SpatialExperiment-coercion}
 \alias{SpatialExperiment-coercion}
+\alias{toSpatialExperiment}
 \alias{coerce,}
 \alias{SingleCellExperiment,}
 \alias{SpatialExperiment-method}
-\alias{toSpatialExperiment}
-\title{SpatialExperiment coertion methods}
+\title{SCE to SpE coercion}
+\usage{
+toSpatialExperiment(
+  sce,
+  sample_id = "sample01",
+  spatialDataNames = NULL,
+  spatialCoordsNames = NULL,
+  spatialData = NULL,
+  spatialCoords = NULL,
+  scaleFactors = 1,
+  imageSources = NULL,
+  image_id = NULL,
+  loadImage = TRUE,
+  imgData = NULL
+)
+}
 \arguments{
-\item{sce}{A \code{\link{SingleCellExperiment}} object with populated slots 
-of the base class.}
+\item{sce}{A \code{\link{SingleCellExperiment}} object 
+with populated slots of the base class.}
 
 \item{sample_id}{A \code{character} sample identifier, which matches the
 \code{sample_id} in \code{\link{imgData}}. The \code{sample_id} will also
@@ -47,10 +62,6 @@ JSON file for the 10x Genomics Visium platform. For 10x Genomics Visium,
 the correct scale factor will automatically be selected depending on the
 resolution of the image from \code{imageSources}. Default = \code{1}.}
 
-\item{imgData}{Optional \code{\link{DataFrame}} containing the image data.
-Alternatively, this can be built from the arguments \code{imageSources} and
-\code{image_id} (see Details).}
-
 \item{imageSources}{Optional file path(s) or URL(s) for one or more image
 sources.}
 
@@ -59,55 +70,65 @@ sources.}
 
 \item{loadImage}{Logical indicating whether to load image into memory.
 Default = \code{FALSE}.}
+
+\item{imgData}{Optional \code{\link{DataFrame}} containing the image data.
+Alternatively, this can be built from the arguments \code{imageSources} and
+\code{image_id} (see Details).}
 }
 \description{
-The \code{SpatialExperiment} class inherits from the 
-\code{SingleCellExperiment} class making necessary to coerce between these 
-classes.
-To do so, we designed two different methods the traditional \code{as} method
-and the \code{toSpatialExperiment} function (reccomended).
-The \code{as} method expects a \code{SingleCellExperiment} object with 
-already populated \code{int_colData} by two elements, the \code{spatialData}
-and the \code{spatialCoords}.
+The \code{SpatialExperiment} (SpE) class inherits from the 
+\code{SingleCellExperiment} (SCE) class, making it necessary 
+to coerce between these classes.
+Two different methods may be used to do this: 
+the traditional \code{as} method and 
+the \code{toSpatialExperiment} function (recommended).
 
-The \code{toSpatialExperiment} expects a \code{SingleCellExperiment} object
-and additional arguments as explained in the related section of this 
-documentation.
+The \code{as} method expects a \code{SingleCellExperiment} with 
+valid \code{int_colData} fields \code{spatialData} and \code{spatialCoords}.
+
+The \code{toSpatialExperiment} expects a \code{SingleCellExperiment} 
+and additional arguments providing relevant spatial data (see below).
 }
 \examples{
 dir <- system.file(
-file.path("extdata", "10xVisium", "section1"),
-package = "SpatialExperiment")
+  file.path("extdata", "10xVisium", "section1"),
+  package = "SpatialExperiment")
 
 # read in counts
 fnm <- file.path(dir, "raw_feature_bc_matrix")
 sce <- DropletUtils::read10xCounts(fnm)
 
-
 # read in spatial coordinates
 fnm <- file.path(dir, "spatial", "tissue_positions_list.csv")
-xyz <- read.csv(fnm, header = FALSE,
-                col.names = c(
-                    "barcode", "in_tissue", "array_row", "array_col",
-                    "pxl_row_in_fullres", "pxl_col_in_fullres"))
+xyz <- read.csv(fnm, 
+  header = FALSE,
+  col.names = c(
+    "barcode", "in_tissue", "array_row", "array_col",
+    "pxl_row_in_fullres", "pxl_col_in_fullres"))
 
+###############
+# 'as' method #
+###############
+int_colData(sce)$spatialData <- DataFrame(xyz[, c(1:4)])
+int_colData(sce)$spatialCoords <- as.matrix(xyz[, c(5, 6)])
 
-## as method
-int_colData(sce)$spatialData <- DataFrame(xyz[,c(1:4)])
-int_colData(sce)$spatialCoords <- as.matrix(xyz[,c(5,6)])
-## Coercing an sce without imgData
+# coercing a SCE without 'imgData'
 spe <- as(sce, "SpatialExperiment")
-## Coercing an sce with imgData
+
+# coercing a SCE with 'imgData'
 img <- readImgData(
     path = file.path(dir, "spatial"),
-    sample_id="sample01")
+    sample_id = "sample01")
 int_colData(sce)$imgData <- img
 spe <- as(sce, "SpatialExperiment")
 
-## toSpatialExperiment method
+################################
+# 'toSpatialExperiment' method #
+################################
 (spe <- toSpatialExperiment(sce,
-    imgData = img,
-    spatialData=DataFrame(xyz), 
-    spatialCoordsNames=c("pxl_col_in_fullres", "pxl_row_in_fullres"),
-    sample_id="sample01"))
+  imgData = img,
+  spatialData = DataFrame(xyz), 
+  spatialCoordsNames = c("pxl_col_in_fullres", "pxl_row_in_fullres"),
+  sample_id = "sample01"))
+  
 }

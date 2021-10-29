@@ -1,28 +1,51 @@
-dir <- system.file(
-    file.path("extdata", "10xVisium", "section1"),
-    package = "SpatialExperiment")
-fnm <- file.path(dir, "spatial", "tissue_positions_list.csv")
-xyz <- read.csv(fnm, header = FALSE, col.names = c(
-    "barcode", "in_tissue", "array_row", "array_col",
-    "pxl_row_in_fullres", "pxl_col_in_fullres"))
-img <- readImgData(
-    path = file.path(dir, "spatial"),
-    sample_id="sample01")
+# mock up some SCE, 'imgData', 'spatialData' & '-Coords'
+example(SingleCellExperiment, echo=FALSE)
+spi <- new(
+    "LoadedSpatialImage", 
+    image = as.raster(matrix(0, 10, 10)))
+id <- DataFrame(
+    sample_id = "foo", 
+    image_id = "foo", 
+    data = I(list(spi)),
+    scaleFactor = 1)
+sd <- DataFrame(replicate(n <- 5, seq(ncol(sce))))
+names(sd) <- letters[seq_len(n)]
+xy <- matrix(0, ncol(sce), 2)
+colnames(xy) <- c("a", "b")
 
-test_that("SingleCellExperiment to SpatialExperiment", {
-    example(SingleCellExperiment, echo=FALSE)
+.test <- function(fun, method) {
+    # missing 'spatialData' & '-Coords'
+    switch(method,
+        as = expect_error(fun(sce)),
+        to = {
+            # empty coercion
+            spe <- toSpatialExperiment(.sce)
+            expect_true(isEmpty(imgData(spe)))
+            expect_true(isEmpty(spatialData(spe)))
+            expect_true(isEmpty(spatialCoords(spe)))
+            expect_true(is.character(spe$sample_id))
+        })
+    int_colData(sce)$spatialData <- sd
+    int_colData(sce)$spatialCoords <- xy
     
-    sce1 <- sce <- sce[1:50, 1:50]
-    int_colData(sce1)$spatialData <- DataFrame(xyz[,c(1:4)])
-    int_colData(sce1)$spatialCoords <- as.matrix(xyz[,c(5,6)])
-    expect_warning(as(sce1, "SpatialExperiment"))
-    int_colData(sce1)$imgData <- img
+    # missing 'imgData'
+    switch(method,
+        as = expect_message(spe <- fun(sce)),
+        to = expect_silent(spe <- fun(sce)))
+    expect_true(isEmpty(imgData(spe)))
     
-    expect_s4_class(as(sce1, "SpatialExperiment"), class="SpatialExperiment")
+    # complete coercion
+    sce$sample_id <- "foo"
+    int_metadata(sce)$imgData <- id
+    expect_silent(spe <- fun(sce))
+    expect_s4_class(spe, "SpatialExperiment")
+    expect_identical(imgData(spe), id)
+    expect_identical(spatialData(spe), sd)
+    expect_identical(spatialCoords(spe), xy)
+    expect_identical(sce$sample_id, spe$sample_id)
+    expect_identical(spatialDataNames(spe), names(sd))
+    expect_identical(spatialCoordsNames(spe), colnames(xy))
+}
 
-    expect_s4_class(toSpatialExperiment(sce, imgData = img,
-        spatialData=DataFrame(xyz),
-        spatialCoordsNames=c("pxl_col_in_fullres", "pxl_row_in_fullres"),
-        sample_id="sample01"), "SpatialExperiment")
-})
-
+test_that("as(SCE, SpE)", .test(\(.) as(., "SpatialExperiment"), "as"))
+test_that("toSpatialExperiment()", .test(\(.) toSpatialExperiment(.), "to"))
